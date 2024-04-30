@@ -10,6 +10,7 @@ GRASP_MAX_TOLERANCE = 0.05
 THRESH_GOOD = 0.7
 THRESH_BAD = 0.1
 
+
 def transform_point_cloud(cloud, transform, format='4x4'):
     """ Transform points to new coordinates with transformation matrix.
 
@@ -38,7 +39,8 @@ def transform_point_cloud(cloud, transform, format='4x4'):
         cloud_transformed = cloud_transformed[:, :3]
     return cloud_transformed
 
-def generate_grasp_views(N=300, phi=(np.sqrt(5)-1)/2, center=np.zeros(3), r=1):
+
+def generate_grasp_views(N=300, phi=(np.sqrt(5) - 1) / 2, center=np.zeros(3), r=1):
     """ View sampling on a unit sphere using Fibonacci lattices.
         Ref: https://arxiv.org/abs/0912.4540
 
@@ -59,11 +61,12 @@ def generate_grasp_views(N=300, phi=(np.sqrt(5)-1)/2, center=np.zeros(3), r=1):
     views = []
     for i in range(N):
         zi = (2 * i + 1) / N - 1
-        xi = np.sqrt(1 - zi**2) * np.cos(2 * i * np.pi * phi)
-        yi = np.sqrt(1 - zi**2) * np.sin(2 * i * np.pi * phi)
+        xi = np.sqrt(1 - zi ** 2) * np.cos(2 * i * np.pi * phi)
+        yi = np.sqrt(1 - zi ** 2) * np.sin(2 * i * np.pi * phi)
         views.append([xi, yi, zi])
     views = r * np.array(views) + center
     return torch.from_numpy(views.astype(np.float32))
+
 
 def batch_viewpoint_params_to_matrix(batch_towards, batch_angle):
     """ Transform approach vectors and in-plane rotation angles to rotation matrices.
@@ -81,19 +84,20 @@ def batch_viewpoint_params_to_matrix(batch_towards, batch_angle):
     axis_x = batch_towards
     ones = torch.ones(axis_x.shape[0], dtype=axis_x.dtype, device=axis_x.device)
     zeros = torch.zeros(axis_x.shape[0], dtype=axis_x.dtype, device=axis_x.device)
-    axis_y = torch.stack([-axis_x[:,1], axis_x[:,0], zeros], dim=-1)
+    axis_y = torch.stack([-axis_x[:, 1], axis_x[:, 0], zeros], dim=-1)
     mask_y = (torch.norm(axis_y, dim=-1) == 0)
-    axis_y[mask_y,1] = 1
+    axis_y[mask_y, 1] = 1
     axis_x = axis_x / torch.norm(axis_x, dim=-1, keepdim=True)
     axis_y = axis_y / torch.norm(axis_y, dim=-1, keepdim=True)
-    axis_z = torch.cross(axis_x, axis_y)
+    axis_z = torch.linalg.cross(axis_x, axis_y)
     sin = torch.sin(batch_angle)
     cos = torch.cos(batch_angle)
     R1 = torch.stack([ones, zeros, zeros, zeros, cos, -sin, zeros, sin, cos], dim=-1)
-    R1 = R1.reshape([-1,3,3])
+    R1 = R1.reshape([-1, 3, 3])
     R2 = torch.stack([axis_x, axis_y, axis_z], dim=-1)
     batch_matrix = torch.matmul(R2, R1)
     return batch_matrix
+
 
 def huber_loss(error, delta=1.0):
     """
@@ -111,5 +115,5 @@ def huber_loss(error, delta=1.0):
     abs_error = torch.abs(error)
     quadratic = torch.clamp(abs_error, max=delta)
     linear = (abs_error - quadratic)
-    loss = 0.5 * quadratic**2 + delta * linear
+    loss = 0.5 * quadratic ** 2 + delta * linear
     return loss

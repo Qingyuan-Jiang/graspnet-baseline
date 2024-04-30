@@ -35,36 +35,40 @@ cfgs = parser.parse_args()
 # ------------------------------------------------------------------------- GLOBAL CONFIG BEG
 if not os.path.exists(cfgs.dump_dir): os.mkdir(cfgs.dump_dir)
 
-# Init datasets and dataloaders 
+
+# Init datasets and dataloaders
 def my_worker_init_fn(worker_id):
     np.random.seed(np.random.get_state()[1][0] + worker_id)
     pass
 
+
 # Create Dataset and Dataloader
-TEST_DATASET = GraspNetDataset(cfgs.dataset_root, valid_obj_idxs=None, grasp_labels=None, split='test', camera=cfgs.camera, num_points=cfgs.num_point, remove_outlier=True, augment=False, load_label=False)
+TEST_DATASET = GraspNetDataset(cfgs.dataset_root, valid_obj_idxs=None, grasp_labels=None, split='test',
+                               camera=cfgs.camera, num_points=cfgs.num_point, remove_outlier=True, augment=False,
+                               load_label=False)
 
 print(len(TEST_DATASET))
 SCENE_LIST = TEST_DATASET.scene_list()
 TEST_DATALOADER = DataLoader(TEST_DATASET, batch_size=cfgs.batch_size, shuffle=False,
-    num_workers=4, worker_init_fn=my_worker_init_fn, collate_fn=collate_fn)
+                             num_workers=4, worker_init_fn=my_worker_init_fn, collate_fn=collate_fn)
 print(len(TEST_DATALOADER))
 # Init the model
 net = GraspNet(input_feature_dim=0, num_view=cfgs.num_view, num_angle=12, num_depth=4,
-                     cylinder_radius=0.05, hmin=-0.02, hmax_list=[0.01,0.02,0.03,0.04], is_training=False)
+               cylinder_radius=0.05, hmin=-0.02, hmax_list=[0.01, 0.02, 0.03, 0.04], is_training=False)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 net.to(device)
 # Load checkpoint
 checkpoint = torch.load(cfgs.checkpoint_path)
 net.load_state_dict(checkpoint['model_state_dict'])
 start_epoch = checkpoint['epoch']
-print("-> loaded checkpoint %s (epoch: %d)"%(cfgs.checkpoint_path, start_epoch))
+print("-> loaded checkpoint %s (epoch: %d)" % (cfgs.checkpoint_path, start_epoch))
 
 
 # ------------------------------------------------------------------------- GLOBAL CONFIG END
 
 def inference():
     batch_interval = 100
-    stat_dict = {} # collect statistics
+    stat_dict = {}  # collect statistics
     # set model to eval mode (for bn and dp)
     net.eval()
     tic = time.time()
@@ -76,7 +80,7 @@ def inference():
                         batch_data[key][i][j] = batch_data[key][i][j].to(device)
             else:
                 batch_data[key] = batch_data[key].to(device)
-        
+
         # Forward pass
         with torch.no_grad():
             end_points = net(batch_data)
@@ -97,15 +101,16 @@ def inference():
 
             # save grasps
             save_dir = os.path.join(cfgs.dump_dir, SCENE_LIST[data_idx], cfgs.camera)
-            save_path = os.path.join(save_dir, str(data_idx%256).zfill(4)+'.npy')
+            save_path = os.path.join(save_dir, str(data_idx % 256).zfill(4) + '.npy')
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
             gg.save_npy(save_path)
 
         if batch_idx % batch_interval == 0:
             toc = time.time()
-            print('Eval batch: %d, time: %fs'%(batch_idx, (toc-tic)/batch_interval))
+            print('Eval batch: %d, time: %fs' % (batch_idx, (toc - tic) / batch_interval))
             tic = time.time()
+
 
 def evaluate():
     ge = GraspNetEval(root=cfgs.dataset_root, camera=cfgs.camera, split='test')
@@ -113,6 +118,7 @@ def evaluate():
     save_dir = os.path.join(cfgs.dump_dir, 'ap_{}.npy'.format(cfgs.camera))
     np.save(save_dir, res)
 
-if __name__=='__main__':
+
+if __name__ == '__main__':
     inference()
     evaluate()
